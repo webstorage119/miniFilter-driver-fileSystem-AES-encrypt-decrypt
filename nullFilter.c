@@ -226,7 +226,7 @@ NTSTATUS PfltInstanceSetupCallback(
     {
         KdPrint(("STATUS_FLT_VOLUME_NOT_FOUND\n"));
     }
-    CopyUnicodeStrings(v->GUID, tempString);
+    //CopyUnicodeStrings(v->GUID, tempString);
     KdPrint(("guid: %wZ\n", tempString));
     DfFreeUnicodeString(&tempString);
     
@@ -425,6 +425,7 @@ NTSTATUS PfltInstanceSetupCallback(
         if (wcscmp(USB_NAME, hwId) == 0)
         {
             KdPrint(("identical\n"));
+            KdPrint(("-----------------\n"));
             return STATUS_SUCCESS;
         }
     }
@@ -437,7 +438,7 @@ NTSTATUS PfltInstanceSetupCallback(
 NTSTATUS MiniUnload(FLT_FILTER_UNLOAD_FLAGS Flags)
 {
     KdPrint(("Driver unloaded2 \r\n"));
-    ExFreePool(v);
+    //ExFreePool(v);
     FltUnregisterFilter(FilterHandle);
 
     return STATUS_SUCCESS;
@@ -531,7 +532,7 @@ FLT_PREOP_CALLBACK_STATUS MiniPreWrite(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OB
 
                     return FLT_PREOP_COMPLETE; //this return status will make the Io manager to not move the irp to the lower drivers
                 }
-                //KdPrint(("Write file: %ws \r\n", Name));
+                KdPrint(("Write file: %ws \r\n", Name));
                 FltReleaseFileNameInformation(FileNameInfo);
 
                 
@@ -577,7 +578,7 @@ FLT_PREOP_CALLBACK_STATUS MiniPostRead(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OB
     NTSTATUS status;
     WCHAR Name[200] = { 0 };
 
-    
+    KdPrint(("read call\n"));
     status = FltGetFileNameInformation(Data, FLT_FILE_NAME_NORMALIZED | FLT_FILE_NAME_QUERY_DEFAULT, &FileNameInfo);
 
     if (NT_SUCCESS(status))
@@ -591,10 +592,10 @@ FLT_PREOP_CALLBACK_STATUS MiniPostRead(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OB
             {
                 RtlCopyMemory(Name, FileNameInfo->Name.Buffer, FileNameInfo->Name.MaximumLength);
                 _wcsupr(Name);
-                
+                KdPrint(("read file %ws\n", Name));
                 if (wcsstr(Name, L"OPENME") != NULL)
                 {
-                    KdPrint(("read file %ws", Name));
+                    KdPrint(("read file %ws\n", Name));
                     char* ioBuffer = NULL;
                     PMDL MdlAddress = Data->Iopb->Parameters.Read.MdlAddress;
                     ULONG Length = (ULONG)Data->Iopb->Parameters.Read.Length;
@@ -605,13 +606,13 @@ FLT_PREOP_CALLBACK_STATUS MiniPostRead(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OB
                         // Don't expect chained MDLs this high up the stack
                         ASSERT(MdlAddress->Next == NULL);
                         ioBuffer = (char*)MmGetSystemAddressForMdlSafe(MdlAddress, NormalPagePriority);
-                        KdPrint(("read file Mdl: %s", ioBuffer));
+                        KdPrint(("read file Mdl: %s\n", ioBuffer));
                     }
                     else
                     {
                         ioBuffer = (char*)Data->Iopb->Parameters.Read.ReadBuffer;
 
-                        KdPrint(("readBuffer file: %s", ioBuffer));
+                        KdPrint(("readBuffer file: %s\n", ioBuffer));
                     }
 
                     if (ioBuffer != NULL)
@@ -619,7 +620,7 @@ FLT_PREOP_CALLBACK_STATUS MiniPostRead(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OB
                         //KdPrint(("read file: %s", ioBuffer));
                     }
                     else {
-                        KdPrint(("read buffer is null"));
+                        KdPrint(("read buffer is null\n"));
                     }
                     
                     char* str = "234";
@@ -628,6 +629,15 @@ FLT_PREOP_CALLBACK_STATUS MiniPostRead(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OB
                 }
             }
         }
+        else
+        {
+            KdPrint(("cant parse file info 0x%x\n"));
+        
+        }
+    }
+    else
+    {
+        KdPrint(("not success read get file info 0x%x\n"));
     }
 
     return FLT_POSTOP_FINISHED_PROCESSING;
@@ -636,15 +646,15 @@ FLT_PREOP_CALLBACK_STATUS MiniPostRead(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OB
 NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
 {
     NTSTATUS status;
-    DRIVER_ADD_DEVICE MyAddDevice;
-    DriverObject->DriverExtension->AddDevice = MyAddDevice;
+    //DRIVER_ADD_DEVICE MyAddDevice;
+    //DriverObject->DriverExtension->AddDevice = MyAddDevice;
     
     status = FltRegisterFilter(DriverObject, &FilterRegistration, &FilterHandle);
 
     if (NT_SUCCESS(status))
     {
        
-        v = (PVolume)ExAllocatePool(NonPagedPool, sizeof(Volume)); //allocate memory for Volume struct
+        //v = (PVolume)ExAllocatePool(NonPagedPool, sizeof(Volume)); //allocate memory for Volume struct
         //IoGetDeviceObjectPointer
         //IoGetDeviceAttachmentBaseRef
 
