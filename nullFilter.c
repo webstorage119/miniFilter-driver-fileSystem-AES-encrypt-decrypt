@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <Ntddvol.h>
+#include <aes.h>
 
 
 #define USB_NAME L"USBSTOR\\DiskSanDisk_Cruzer_Blade____1.00"
