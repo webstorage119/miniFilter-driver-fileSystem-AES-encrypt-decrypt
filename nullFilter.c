@@ -5,7 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <Ntddvol.h>
-#include <aes.h>
+#include <bcrypt.h>
+
+//read - https://docs.microsoft.com/en-us/windows/win32/api/bcrypt/nf-bcrypt-bcryptencrypt
+
 
 
 #define USB_NAME L"USBSTOR\\DiskSanDisk_Cruzer_Blade____1.00"
@@ -31,6 +34,22 @@
 
 #define DF_NOTIFICATION_MASK            (TRANSACTION_NOTIFY_COMMIT_FINALIZE | \
                                          TRANSACTION_NOTIFY_ROLLBACK)
+
+
+UNICODE_STRING DeviceName = RTL_CONSTANT_STRING(L"\\Device\\UsbDiskOnKeyDriver");
+UNICODE_STRING SymlinkName = RTL_CONSTANT_STRING(L"\\??\\UsbDiskOnKeySymName");
+
+
+PDEVICE_OBJECT DeviceObject = NULL;
+
+
+typedef struct {
+    BCRYPT_ALG_HANDLE phAlgorithm;
+    BCRYPT_KEY_HANDLE phKey;
+    PUCHAR pbKeyObject;
+} BcryptHandles,*PBcryptHandles;
+
+BcryptHandles bHandles;
 
 NTSTATUS CopyUnicodeStrings(UNICODE_STRING dest, UNICODE_STRING source)
 {
@@ -505,6 +524,7 @@ FLT_PREOP_CALLBACK_STATUS MiniPreWrite(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OB
                     char* ioBuffer = NULL;
                     PMDL MdlAddress = Data->Iopb->Parameters.Write.MdlAddress;
                     ULONG Length = (ULONG)Data->Iopb->Parameters.Write.Length;
+
                     if (NULL != MdlAddress)
                     {
                         // Don't expect chained MDLs this high up the stack
@@ -519,12 +539,17 @@ FLT_PREOP_CALLBACK_STATUS MiniPreWrite(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OB
 
                     if (ioBuffer != NULL)
                     {
+                        PVOID EncryptedBuffer;
+                        ULONG SizeOfBuffer;
+                        Encrypt(Data->Iopb->Parameters.Write.WriteBuffer, Data->Iopb->Parameters.Write.Length, &EncryptedBuffer, &SizeOfBuffer);
+                        RtlCopyMemory(Data->Iopb->Parameters.Write.WriteBuffer, EncryptedBuffer, SizeOfBuffer);
+                        ExFreePool(EncryptedBuffer);
                         KdPrint(("the write buffer is: %s\n", ioBuffer));
                     }
                     else {
                         KdPrint(("the write buffer is null\n"));
                     }
-
+                    
 
                     Data->IoStatus.Status = STATUS_INVALID_PARAMETER;
                     Data->IoStatus.Information = 0;
@@ -618,6 +643,11 @@ FLT_PREOP_CALLBACK_STATUS MiniPostRead(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OB
 
                     if (ioBuffer != NULL)
                     {
+                        PVOID DecryptedBuffer;
+                        ULONG SizeOfBuffer;
+                        Decrypt(Data->Iopb->Parameters.Read.ReadBuffer, Data->Iopb->Parameters.Read.Length, &DecryptedBuffer, &SizeOfBuffer);
+                        RtlCopyMemory(Data->Iopb->Parameters.Read.ReadBuffer, DecryptedBuffer, SizeOfBuffer);
+                        ExFreePool(DecryptedBuffer);
                         //KdPrint(("read file: %s", ioBuffer));
                     }
                     else {
@@ -644,12 +674,84 @@ FLT_PREOP_CALLBACK_STATUS MiniPostRead(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OB
     return FLT_POSTOP_FINISHED_PROCESSING;
 }
 
+
+NTSTATUS Encrypt(PVOID Data,ULONG size,PVOID *EncryptedData, PULONG SizeOfBuffer)
+{
+    ULONG SizeOfCipherText;
+    BCryptEncrypt(bHandles.phKey, Data, size, NULL, NULL, 0, NULL, 0, &SizeOfCipherText, 0);
+    *EncryptedData = ExAllocatePool(NonPagedPool, SizeOfCipherText);
+    BCryptEncrypt(bHandles.phKey, Data, size, EncryptedData, SizeOfCipherText, 0, NULL, 0, &SizeOfCipherText, 0);
+    *SizeOfBuffer = SizeOfCipherText;
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS Decrypt(PVOID EncryptedData, ULONG size, PVOID* Data, PULONG SizeOfBuffer)
+{
+    ULONG SizeOfPlainText;
+    BCryptDecrypt(bHandles.phKey, EncryptedData, size, NULL, NULL, 0, NULL, 0, &SizeOfPlainText, 0);
+    *Data = ExAllocatePool(NonPagedPool, SizeOfPlainText);
+    BCryptEncrypt(bHandles.phKey, EncryptedData, size, Data, SizeOfPlainText, 0, NULL, 0, &SizeOfPlainText, 0);
+    *SizeOfBuffer = SizeOfPlainText;
+    return STATUS_SUCCESS;
+}
+
+
 NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
 {
+    
     NTSTATUS status;
+    KdPrint(("sdfs"));
+    
     //DRIVER_ADD_DEVICE MyAddDevice;
     //DriverObject->DriverExtension->AddDevice = MyAddDevice;
+
+
+    /*status = IoCreateDevice(DriverObject, 0, &DeviceName, FILE_DEVICE_UNKNOWN, FILE_DEVICE_SECURE_OPEN, FALSE, &DeviceObject);
+
+    if (!NT_STATUS(status))
+    {
+        return status;
+    }*/
+
+    BCRYPT_ALG_HANDLE phAlgorithm;
+
     
+    status = BCryptOpenAlgorithmProvider(
+        &phAlgorithm,
+        BCRYPT_AES_ALGORITHM,
+        MS_PRIMITIVE_PROVIDER,
+        0
+    );
+
+    
+    BCRYPT_KEY_HANDLE keyHandle = { 0 };
+
+    int size = 256;
+    PUCHAR key = (PUCHAR)ExAllocatePool(NonPagedPool,size);
+
+    PUCHAR secret = (PUCHAR)ExAllocatePool(NonPagedPool, size);
+    
+
+    strcpy((char*)secret, "tomhapro123");
+    
+    BCryptGenerateSymmetricKey(phAlgorithm, &keyHandle, key, 256, secret, 256, 0);
+    
+    bHandles.phKey = keyHandle;
+    bHandles.pbKeyObject = key;
+    bHandles.phAlgorithm = phAlgorithm;
+    /*status = IoCreateSymbolicLink(&SymlinkName, &DeviceName);
+    if (!NT_SUCCESS(status))
+    {
+        IoDeleteDevice(DeviceObject);
+        return status;
+    }*/
+
+    //DriverObject->MajorFunction[IRP_MJ_READ] = ReturnPassTrue;
+    //DriverObject->MajorFunction[IRP_MJ_WRITE] = GetPass;
+
+
+
+
     status = FltRegisterFilter(DriverObject, &FilterRegistration, &FilterHandle);
 
     if (NT_SUCCESS(status))
@@ -751,3 +853,5 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
 
     return STATUS_SUCCESS;
 }
+
+

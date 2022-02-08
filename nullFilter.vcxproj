@@ -83,6 +83,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <TargetName>nullFilter</TargetName>
     <EnableInf2cat>false</EnableInf2cat>
+    <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <TargetName>nullFilter</TargetName>
@@ -113,10 +114,10 @@
       <AdditionalIncludeDirectories>C:\Users\ftom7\OneDrive\Documents\programming\c\FilterDriver\Try\AES\tiny-AES-c;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>%(AdditionalDependencies);$(DDK_LIB_PATH)\fltMgr.lib;legacy_stdio_definitions.lib;./AES/tiny-AES-c/out/build/x64-Debug/tiny-aes.lib</AdditionalDependencies>
+      <AdditionalDependencies>%(AdditionalDependencies);$(DDK_LIB_PATH)\fltMgr.lib;legacy_stdio_definitions.lib;Cng.lib;C:\Users\ftom7\OneDrive\Documents\programming\c\FilterDriver\Try\AES\tiny-AES-c\out\build\x64-Debug\tiny-aes.lib</AdditionalDependencies>
       <TreatLinkerWarningAsErrors>false</TreatLinkerWarningAsErrors>
       <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
-      <AdditionalLibraryDirectories>C:\Users\ftom7\OneDrive\Documents\programming\c\FilterDriver\Try\AES;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Users\ftom7\OneDrive\Documents\programming\c\FilterDriver\Try\AES\tiny-AES-c;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <DriverSign>
       <FileDigestAlgorithm>sha256</FileDigestAlgorithm>
